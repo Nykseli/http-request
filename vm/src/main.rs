@@ -43,11 +43,22 @@ fn read_string(pid: Pid, address: AddressType) -> String {
     string
 }
 
-fn handle_syscall(child: Pid, regs: &user_regs_struct) {
+fn handle_syscall(child: Pid, regs: user_regs_struct) {
     println!(
         "Handle: {:?}",
         system_call_names::SYSTEM_CALL_NAMES[(regs.orig_rax) as usize]
     );
+
+    // TODO: use fs_fh_file_handle in fuse fs to test that this actually prevents the syscall
+    if regs.orig_rax == 2 {
+        let mut tmp = regs;
+        tmp.rax = u64::MAX;
+        // Setting orig_rax is the one that prevents (a valid) syscall from happening
+        // but might as well set the rax to invalid value too
+        tmp.orig_rax = u64::MAX;
+        ptrace::setregs(child, tmp).unwrap();
+    }
+
     ptrace::step(child, None).unwrap();
     wait().unwrap();
 
@@ -88,7 +99,7 @@ fn run_tracer(child: Pid) -> Result<(), nix::errno::Errno> {
         wait()?;
 
         let regs = ptrace::getregs(child)?;
-        handle_syscall(child, &regs);
+        handle_syscall(child, regs);
     }
 }
 
