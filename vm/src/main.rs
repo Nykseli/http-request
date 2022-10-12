@@ -1,15 +1,47 @@
 mod system_call_names;
 
+use byteorder::{LittleEndian, WriteBytesExt};
 use linux_personality::personality;
-use nix::sys::ptrace;
+use nix::sys::ptrace::{self, AddressType};
 use nix::sys::wait::wait;
 use nix::unistd::{fork, ForkResult, Pid};
 use reqwest;
 use std::env;
+
 use std::os::unix::process::CommandExt;
 use std::process::{exit, Command};
 
-use libc::user_regs_struct;
+use libc::{c_long, c_void, user_regs_struct};
+
+fn read_string(pid: Pid, address: AddressType) -> String {
+    let mut string = String::new();
+    // Move 8 bytes up each time for next read.
+    let mut count = 0;
+    let word_size = 8;
+
+    'done: loop {
+        let mut bytes: Vec<u8> = vec![];
+        let address = unsafe { address.offset(count) };
+
+        let res: c_long = ptrace::read(pid, address).unwrap_or_else(|err| {
+            panic!("Failed to read data for pid {}: {}", pid, err);
+        });
+        bytes.write_i64::<LittleEndian>(res).unwrap_or_else(|err| {
+            panic!("Failed to write {} as i64 LittleEndian: {}", res, err);
+        });
+
+        for b in bytes {
+            if b != 0 {
+                string.push(b as char);
+            } else {
+                break 'done;
+            }
+        }
+        count += word_size;
+    }
+
+    string
+}
 
 fn handle_syscall(child: Pid, regs: &user_regs_struct) {
     println!(
@@ -20,7 +52,17 @@ fn handle_syscall(child: Pid, regs: &user_regs_struct) {
     wait().unwrap();
 
     if regs.orig_rax == 2 {
-        let resp = reqwest::blocking::get("http://localhost:8081/open")
+        let path = read_string(child, regs.rdi as *mut c_void);
+
+        let client = reqwest::blocking::Client::new();
+        let resp = client
+            .post("http://localhost:8081/open")
+            .json(&http_data::OpenRequest {
+                path: path,
+                oflag: regs.rsi,
+                mode: regs.rdx,
+            })
+            .send()
             .unwrap()
             .json::<http_data::SysCallResp<http_data::OpenResp>>()
             .unwrap();
