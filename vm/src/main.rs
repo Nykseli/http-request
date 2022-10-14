@@ -107,16 +107,16 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
             })
             .send()
             .unwrap()
-            .json::<http_data::SysCallResp<http_data::ReadResp>>()
+            .json::<http_data::ReadResp>()
             .unwrap();
 
-        if let Some(data) = resp.response.data {
+        if let Some(data) = resp.data {
             let byte_buf = http_data::decode_buffer(&data);
             write_data(child, write_addr as *mut c_void, &byte_buf)
         }
 
         if let Ok(mut new_regs) = ptrace::getregs(child) {
-            new_regs.rax = resp.response.read_length as u64;
+            new_regs.rax = resp.ret_value as u64;
             ptrace::setregs(child, new_regs).unwrap();
         }
     } else if regs.orig_rax == 2 {
@@ -132,11 +132,11 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
             })
             .send()
             .unwrap()
-            .json::<http_data::SysCallResp<http_data::OpenResp>>()
+            .json::<http_data::OpenResp>()
             .unwrap();
 
         if let Ok(mut new_regs) = ptrace::getregs(child) {
-            new_regs.rax = resp.response.fd as u64;
+            new_regs.rax = resp.ret_value as u64;
             ptrace::setregs(child, new_regs).unwrap();
         }
     } else if regs.orig_rax == 3 {
@@ -148,11 +148,11 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
             })
             .send()
             .unwrap()
-            .json::<http_data::SysCallResp<http_data::CloseResp>>()
+            .json::<http_data::CloseResp>()
             .unwrap();
 
         if let Ok(mut new_regs) = ptrace::getregs(child) {
-            new_regs.rax = resp.response.ret as u64;
+            new_regs.rax = resp.ret_value as u64;
             ptrace::setregs(child, new_regs).unwrap();
         }
     }

@@ -27,8 +27,6 @@ async fn open(data: web::Json<http_data::OpenRequest>) -> HttpResponse {
 
 #[post("/read")]
 async fn read(data: web::Json<http_data::ReadRequest>) -> HttpResponse {
-    println!("{:#?}", data);
-
     let mut data_buf: Vec<u8> = vec![0; data.nbytes as usize];
     let mut read_length: i64;
 
