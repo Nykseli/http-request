@@ -55,9 +55,27 @@ async fn read(data: web::Json<http_data::ReadRequest>) -> HttpResponse {
     HttpResponse::Ok().json(open_resp)
 }
 
+#[post("/close")]
+async fn close(data: web::Json<http_data::CloseRequest>) -> HttpResponse {
+    let mut ret: i64;
+
+    unsafe {
+        // TODO: Enumerate syscalls
+        asm!(
+            "mov rax, 3",
+            "syscall",
+            in("rdi") data.fd,
+            lateout("rax") ret
+        );
+    }
+
+    let open_resp = http_data::CloseResp::new(200, ret);
+    HttpResponse::Ok().json(open_resp)
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| App::new().service(open).service(read))
+    HttpServer::new(|| App::new().service(open).service(read).service(close))
         .bind(("127.0.0.1", 8081))?
         .run()
         .await

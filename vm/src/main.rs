@@ -83,7 +83,7 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
     );
 
     // TODO: use fs_fh_file_handle in fuse fs to test that this actually prevents the syscall
-    if regs.orig_rax == 2 || regs.orig_rax == 0 {
+    if regs.orig_rax == 3 || regs.orig_rax == 2 || regs.orig_rax == 0 {
         let mut tmp = regs;
         tmp.rax = u64::MAX;
         // Setting orig_rax is the one that prevents (a valid) syscall from happening
@@ -137,6 +137,22 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
 
         if let Ok(mut new_regs) = ptrace::getregs(child) {
             new_regs.rax = resp.response.fd as u64;
+            ptrace::setregs(child, new_regs).unwrap();
+        }
+    } else if regs.orig_rax == 3 {
+        let client = reqwest::blocking::Client::new();
+        let resp = client
+            .post("http://localhost:8081/close")
+            .json(&http_data::CloseRequest {
+                fd: regs.rdi as i64
+            })
+            .send()
+            .unwrap()
+            .json::<http_data::SysCallResp<http_data::CloseResp>>()
+            .unwrap();
+
+        if let Ok(mut new_regs) = ptrace::getregs(child) {
+            new_regs.rax = resp.response.ret as u64;
             ptrace::setregs(child, new_regs).unwrap();
         }
     }

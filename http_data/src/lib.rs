@@ -39,6 +39,25 @@ impl OpenResp {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct CloseRequest {
+    pub fd: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CloseResp {
+    pub ret: i64,
+}
+
+impl CloseResp {
+    pub fn new(status: u64, ret: i64) -> SysCallResp<Self> {
+        SysCallResp::<Self> {
+            status: status,
+            response: Self { ret: ret },
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ReadRequest {
     pub fd: i64,
     pub nbytes: u64,
