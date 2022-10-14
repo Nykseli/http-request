@@ -1,5 +1,6 @@
 use base64;
 use serde::{Deserialize, Serialize};
+use syscall_derive::{syscall_response, SysCall};
 
 // pub type SysData = Option<String>;
 
@@ -11,72 +12,68 @@ pub fn decode_buffer(buf: &str) -> Vec<u8> {
     base64::decode(buf).unwrap_or(vec![])
 }
 
+// TODO: SysCalls always return a value (rax) so make it user definable integer,
+// something like SysVal::Signed, sysval::unsigned
+
+#[derive(Debug)]
+#[repr(u64)]
+pub enum SysCallNum {
+    Read = 0,
+    Write = 1,
+    Open = 2,
+    Close = 3,
+    // NOTE: NoOp is non standard syscall number SHOULD invoke ENOSYS (not implemented)
+    NoOp = u64::MAX,
+}
+
+pub trait SysCall {
+    fn num() -> SysCallNum;
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SysCallResp<T> {
     pub status: u64,
     pub response: T,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(SysCall, Debug, Serialize, Deserialize)]
+#[syscall(num = "Open")]
+pub struct Open;
+
+#[derive(SysCall, Debug, Serialize, Deserialize)]
+#[syscall(num = "Open")]
 pub struct OpenRequest {
     pub path: String,
     pub oflag: u64,
     pub mode: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct OpenResp {
-    pub fd: i64,
-}
+#[syscall_response]
+#[derive(SysCall, Debug, Serialize, Deserialize)]
+#[syscall(num = "Open")]
+pub struct OpenResp;
 
-impl OpenResp {
-    pub fn new(status: u64, fd: i64) -> SysCallResp<Self> {
-        SysCallResp::<Self> {
-            status: status,
-            response: Self { fd: fd },
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(SysCall, Debug, Serialize, Deserialize)]
+#[syscall(num = "Close")]
 pub struct CloseRequest {
     pub fd: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CloseResp {
-    pub ret: i64,
-}
+#[syscall_response]
+#[derive(SysCall, Debug, Serialize, Deserialize)]
+#[syscall(num = "Close")]
+pub struct CloseResp;
 
-impl CloseResp {
-    pub fn new(status: u64, ret: i64) -> SysCallResp<Self> {
-        SysCallResp::<Self> {
-            status: status,
-            response: Self { ret: ret },
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(SysCall, Debug, Serialize, Deserialize)]
+#[syscall(num = "Read")]
 pub struct ReadRequest {
     pub fd: i64,
     pub nbytes: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[syscall_response]
+#[derive(SysCall, Debug, Serialize, Deserialize)]
+#[syscall(num = "Read")]
 pub struct ReadResp {
-    pub read_length: i64,
     pub data: Option<String>,
-}
-
-impl ReadResp {
-    pub fn new(status: u64, read_length: i64, data: Option<String>) -> SysCallResp<Self> {
-        SysCallResp::<Self> {
-            status: status,
-            response: Self {
-                read_length: read_length,
-                data: data,
-            },
-        }
-    }
 }
