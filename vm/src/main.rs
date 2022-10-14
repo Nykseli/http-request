@@ -43,6 +43,39 @@ fn read_string(pid: Pid, address: AddressType) -> String {
     string
 }
 
+fn write_data(pid: Pid, address: AddressType, data: &Vec<u8>) {
+    // Move 8 bytes up each time for next read.
+    let mut count: usize = 0;
+    let word_size: usize = 8;
+
+    'done: loop {
+        if count >= data.len() {
+            break 'done;
+        }
+
+        let mut bytes: [u8; 8] = [0; 8];
+        let address = unsafe { address.offset(count as isize) };
+
+        let next_bytes = if count + word_size <= data.len() {
+            word_size
+        } else {
+            data.len() - count
+        };
+
+        for ii in 0..next_bytes {
+            bytes[ii] = data[count + ii];
+        }
+
+        // NOTE: this only works on 64bit little endian
+        let data_word = u64::from_le_bytes(bytes);
+        unsafe {
+            ptrace::write(pid, address, data_word as *mut c_void).unwrap();
+        }
+
+        count += word_size;
+    }
+}
+
 fn handle_syscall(child: Pid, regs: user_regs_struct) {
     println!(
         "Handle: {:?}",
@@ -50,7 +83,7 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
     );
 
     // TODO: use fs_fh_file_handle in fuse fs to test that this actually prevents the syscall
-    if regs.orig_rax == 2 {
+    if regs.orig_rax == 2 || regs.orig_rax == 0 {
         let mut tmp = regs;
         tmp.rax = u64::MAX;
         // Setting orig_rax is the one that prevents (a valid) syscall from happening
@@ -62,7 +95,31 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
     ptrace::step(child, None).unwrap();
     wait().unwrap();
 
-    if regs.orig_rax == 2 {
+    if regs.orig_rax == 0 {
+        let write_addr = regs.rsi;
+
+        let client = reqwest::blocking::Client::new();
+        let resp = client
+            .post("http://localhost:8081/read")
+            .json(&http_data::ReadRequest {
+                fd: regs.rdi as i64,
+                nbytes: regs.rdx,
+            })
+            .send()
+            .unwrap()
+            .json::<http_data::SysCallResp<http_data::ReadResp>>()
+            .unwrap();
+
+        if let Some(data) = resp.response.data {
+            let byte_buf = http_data::decode_buffer(&data);
+            write_data(child, write_addr as *mut c_void, &byte_buf)
+        }
+
+        if let Ok(mut new_regs) = ptrace::getregs(child) {
+            new_regs.rax = resp.response.read_length as u64;
+            ptrace::setregs(child, new_regs).unwrap();
+        }
+    } else if regs.orig_rax == 2 {
         let path = read_string(child, regs.rdi as *mut c_void);
 
         let client = reqwest::blocking::Client::new();
