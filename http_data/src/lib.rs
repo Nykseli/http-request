@@ -2,7 +2,7 @@ use base64;
 use serde::{Deserialize, Serialize};
 use syscall_derive::{syscall_response, SysCall};
 
-// pub type SysData = Option<String>;
+pub type SysData = Option<String>;
 
 pub fn encode_buffer(buf: &Vec<u8>, length: i64) -> String {
     base64::encode(&buf[0..length as usize])
@@ -29,16 +29,6 @@ pub enum SysCallNum {
 pub trait SysCall {
     fn num() -> SysCallNum;
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SysCallResp<T> {
-    pub status: u64,
-    pub response: T,
-}
-
-#[derive(SysCall, Debug, Serialize, Deserialize)]
-#[syscall(num = "Open")]
-pub struct Open;
 
 #[derive(SysCall, Debug, Serialize, Deserialize)]
 #[syscall(num = "Open")]
@@ -75,5 +65,5 @@ pub struct ReadRequest {
 #[derive(SysCall, Debug, Serialize, Deserialize)]
 #[syscall(num = "Read")]
 pub struct ReadResp {
-    pub data: Option<String>,
+    pub data: SysData,
 }
