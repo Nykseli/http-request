@@ -78,6 +78,22 @@ pub fn derive(input: TokenStream) -> TokenStream {
     output.into()
 }
 
+#[proc_macro_derive(SysCallResp, attributes(syscall,))]
+pub fn resp_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input);
+    let DeriveInput { ident, .. } = input;
+
+    let output = quote! {
+        impl SysCallResp for #ident {
+            fn ret_value(&self) -> i64 {
+                self.ret_value
+            }
+        }
+    };
+
+    output.into()
+}
+
 #[proc_macro_attribute]
 pub fn syscall_response(args: TokenStream, input: TokenStream) -> TokenStream {
     let mut item_struct = parse_macro_input!(input as ItemStruct);

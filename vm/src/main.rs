@@ -1,3 +1,4 @@
+mod request;
 mod system_call_names;
 
 use byteorder::{LittleEndian, WriteBytesExt};
@@ -5,7 +6,6 @@ use linux_personality::personality;
 use nix::sys::ptrace::{self, AddressType};
 use nix::sys::wait::wait;
 use nix::unistd::{fork, ForkResult, Pid};
-use reqwest;
 use std::env;
 
 use std::os::unix::process::CommandExt;
@@ -76,6 +76,13 @@ fn write_data(pid: Pid, address: AddressType, data: &Vec<u8>) {
     }
 }
 
+fn handle_syscall_end<T: http_data::SysCallResp>(child: Pid, resp: &T) {
+    if let Ok(mut new_regs) = ptrace::getregs(child) {
+        new_regs.rax = resp.ret_value() as u64;
+        ptrace::setregs(child, new_regs).unwrap();
+    }
+}
+
 fn handle_syscall(child: Pid, regs: user_regs_struct) {
     println!(
         "Handle: {:?}",
@@ -97,64 +104,41 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
 
     if regs.orig_rax == 0 {
         let write_addr = regs.rsi;
-
-        let client = reqwest::blocking::Client::new();
-        let resp = client
-            .post("http://localhost:8081/read")
-            .json(&http_data::ReadRequest {
+        let resp: http_data::ReadResp = request::unchecked_request(
+            "read",
+            &http_data::ReadRequest {
                 fd: regs.rdi as i64,
                 nbytes: regs.rdx,
-            })
-            .send()
-            .unwrap()
-            .json::<http_data::ReadResp>()
-            .unwrap();
+            },
+        );
 
-        if let Some(data) = resp.data {
+        if let Some(data) = &resp.data {
             let byte_buf = http_data::decode_buffer(&data);
             write_data(child, write_addr as *mut c_void, &byte_buf)
         }
 
-        if let Ok(mut new_regs) = ptrace::getregs(child) {
-            new_regs.rax = resp.ret_value as u64;
-            ptrace::setregs(child, new_regs).unwrap();
-        }
+        handle_syscall_end(child, &resp);
     } else if regs.orig_rax == 2 {
         let path = read_string(child, regs.rdi as *mut c_void);
-
-        let client = reqwest::blocking::Client::new();
-        let resp = client
-            .post("http://localhost:8081/open")
-            .json(&http_data::OpenRequest {
+        let resp: http_data::ReadResp = request::unchecked_request(
+            "open",
+            &http_data::OpenRequest {
                 path: path,
                 oflag: regs.rsi,
                 mode: regs.rdx,
-            })
-            .send()
-            .unwrap()
-            .json::<http_data::OpenResp>()
-            .unwrap();
+            },
+        );
 
-        if let Ok(mut new_regs) = ptrace::getregs(child) {
-            new_regs.rax = resp.ret_value as u64;
-            ptrace::setregs(child, new_regs).unwrap();
-        }
+        handle_syscall_end(child, &resp);
     } else if regs.orig_rax == 3 {
-        let client = reqwest::blocking::Client::new();
-        let resp = client
-            .post("http://localhost:8081/close")
-            .json(&http_data::CloseRequest {
-                fd: regs.rdi as i64
-            })
-            .send()
-            .unwrap()
-            .json::<http_data::CloseResp>()
-            .unwrap();
+        let resp: http_data::ReadResp = request::unchecked_request(
+            "close",
+            &http_data::CloseRequest {
+                fd: regs.rdi as i64,
+            },
+        );
 
-        if let Ok(mut new_regs) = ptrace::getregs(child) {
-            new_regs.rax = resp.ret_value as u64;
-            ptrace::setregs(child, new_regs).unwrap();
-        }
+        handle_syscall_end(child, &resp);
     }
 }
 

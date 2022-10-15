@@ -1,6 +1,6 @@
 use base64;
-use serde::{Deserialize, Serialize};
-use syscall_derive::{syscall_response, SysCall};
+pub use serde::{self, Deserialize, Serialize};
+use syscall_derive::{syscall_response, SysCall, SysCallResp};
 
 pub type SysData = Option<String>;
 
@@ -30,6 +30,10 @@ pub trait SysCall {
     fn num() -> SysCallNum;
 }
 
+pub trait SysCallResp {
+    fn ret_value(&self) -> i64;
+}
+
 #[derive(SysCall, Debug, Serialize, Deserialize)]
 #[syscall(num = "Open")]
 pub struct OpenRequest {
@@ -39,7 +43,7 @@ pub struct OpenRequest {
 }
 
 #[syscall_response]
-#[derive(SysCall, Debug, Serialize, Deserialize)]
+#[derive(SysCall, SysCallResp, Debug, Serialize, Deserialize)]
 #[syscall(num = "Open")]
 pub struct OpenResp;
 
@@ -50,7 +54,7 @@ pub struct CloseRequest {
 }
 
 #[syscall_response]
-#[derive(SysCall, Debug, Serialize, Deserialize)]
+#[derive(SysCall, SysCallResp, Debug, Serialize, Deserialize)]
 #[syscall(num = "Close")]
 pub struct CloseResp;
 
@@ -62,7 +66,7 @@ pub struct ReadRequest {
 }
 
 #[syscall_response]
-#[derive(SysCall, Debug, Serialize, Deserialize)]
+#[derive(SysCall, SysCallResp, Debug, Serialize, Deserialize)]
 #[syscall(num = "Read")]
 pub struct ReadResp {
     pub data: SysData,
