@@ -90,7 +90,7 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
     );
 
     // TODO: use fs_fh_file_handle in fuse fs to test that this actually prevents the syscall
-    if regs.orig_rax == 3 || regs.orig_rax == 2 || regs.orig_rax == 0 {
+    if http_data::is_implemented(regs.orig_rax) {
         let mut tmp = regs;
         tmp.rax = u64::MAX;
         // Setting orig_rax is the one that prevents (a valid) syscall from happening
@@ -102,7 +102,7 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
     ptrace::step(child, None).unwrap();
     wait().unwrap();
 
-    if regs.orig_rax == 0 {
+    if regs.orig_rax == http_data::SysCallNum::Read {
         let write_addr = regs.rsi;
         let resp: http_data::ReadResp = request::unchecked_request(
             "read",
@@ -118,9 +118,9 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
         }
 
         handle_syscall_end(child, &resp);
-    } else if regs.orig_rax == 2 {
+    } else if regs.orig_rax == http_data::SysCallNum::Open {
         let path = read_string(child, regs.rdi as *mut c_void);
-        let resp: http_data::ReadResp = request::unchecked_request(
+        let resp: http_data::OpenResp = request::unchecked_request(
             "open",
             &http_data::OpenRequest {
                 path: path,
@@ -130,8 +130,8 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
         );
 
         handle_syscall_end(child, &resp);
-    } else if regs.orig_rax == 3 {
-        let resp: http_data::ReadResp = request::unchecked_request(
+    } else if regs.orig_rax == http_data::SysCallNum::Close {
+        let resp: http_data::CloseResp = request::unchecked_request(
             "close",
             &http_data::CloseRequest {
                 fd: regs.rdi as i64,

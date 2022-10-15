@@ -15,7 +15,7 @@ pub fn decode_buffer(buf: &str) -> Vec<u8> {
 // TODO: SysCalls always return a value (rax) so make it user definable integer,
 // something like SysVal::Signed, sysval::unsigned
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 #[repr(u64)]
 pub enum SysCallNum {
     Read = 0,
@@ -24,6 +24,27 @@ pub enum SysCallNum {
     Close = 3,
     // NOTE: NoOp is non standard syscall number SHOULD invoke ENOSYS (not implemented)
     NoOp = u64::MAX,
+}
+
+impl PartialEq<u64> for SysCallNum {
+    fn eq(&self, other: &u64) -> bool {
+        *self as u64 == *other
+    }
+}
+
+impl PartialEq<SysCallNum> for u64 {
+    fn eq(&self, other: &SysCallNum) -> bool {
+        *self == *other as u64
+    }
+}
+
+pub fn is_implemented(num: u64) -> bool {
+    let num: SysCallNum = unsafe { ::std::mem::transmute(num) };
+
+    match num {
+        SysCallNum::Read | SysCallNum::Open | SysCallNum::Close => true,
+        _ => false,
+    }
 }
 
 pub trait SysCall {
