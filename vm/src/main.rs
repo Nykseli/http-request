@@ -43,6 +43,42 @@ fn read_string(pid: Pid, address: AddressType) -> String {
     string
 }
 
+fn read_data(pid: Pid, address: AddressType, length: u64) -> Vec<u8> {
+    let mut buf = Vec::new();
+    // Move 8 bytes up each time for next read.
+    let mut count = 0;
+    let _word_size = 8;
+
+    'done: loop {
+        let mut bytes: Vec<u8> = vec![];
+        let address = unsafe { address.offset(count) };
+
+        let res: c_long = ptrace::read(pid, address).unwrap_or_else(|err| {
+            panic!("Failed to read data for pid {}: {}", pid, err);
+        });
+        bytes.write_i64::<LittleEndian>(res).unwrap_or_else(|err| {
+            panic!("Failed to write {} as i64 LittleEndian: {}", res, err);
+        });
+
+        for b in bytes {
+            /*     if b != 0 {
+                   buf.push(b);
+               } else {
+                   break 'done;
+               }
+            */
+            if count >= length as isize {
+                break 'done;
+            }
+
+            buf.push(b);
+            count += 1;
+        }
+    }
+
+    buf
+}
+
 fn write_data(pid: Pid, address: AddressType, data: &Vec<u8>) {
     // Move 8 bytes up each time for next read.
     let mut count: usize = 0;
@@ -112,10 +148,8 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
             },
         );
 
-        if let Some(data) = &resp.data {
-            let byte_buf = http_data::decode_buffer(&data);
-            write_data(child, write_addr as *mut c_void, &byte_buf)
-        }
+        let byte_buf = http_data::decode_buffer(&resp.data);
+        write_data(child, write_addr as *mut c_void, &byte_buf);
 
         handle_syscall_end(child, &resp);
     } else if regs.orig_rax == http_data::SysCallNum::Open {
@@ -135,6 +169,20 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
             "close",
             &http_data::CloseRequest {
                 fd: regs.rdi as i64,
+            },
+        );
+
+        handle_syscall_end(child, &resp);
+    } else if regs.orig_rax == http_data::SysCallNum::Write {
+        let write_data = read_data(child, regs.rsi as *mut c_void, regs.rdx);
+        let buf = http_data::encode_buffer(&write_data, regs.rdx as i64);
+
+        let resp: http_data::WriteResp = request::unchecked_request(
+            "write",
+            &http_data::WriteRequest {
+                fd: regs.rdi as i64,
+                buf: buf,
+                nbytes: regs.rdx,
             },
         );
 

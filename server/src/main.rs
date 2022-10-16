@@ -44,7 +44,7 @@ async fn read(data: web::Json<http_data::ReadRequest>) -> HttpResponse {
     }
 
     let resp_data = if read_length > 0 {
-        Some(http_data::encode_buffer(&data_buf, read_length))
+        http_data::encode_buffer(&data_buf, read_length)
     } else {
         None
     };
@@ -71,10 +71,36 @@ async fn close(data: web::Json<http_data::CloseRequest>) -> HttpResponse {
     HttpResponse::Ok().json(open_resp)
 }
 
+#[post("/write")]
+async fn write(data: web::Json<http_data::WriteRequest>) -> HttpResponse {
+    let mut ret: i64;
+    let mut write_data = http_data::decode_buffer(&data.buf);
+    unsafe {
+        let wptr = write_data.as_mut_ptr();
+        asm!(
+            "syscall",
+            in("rax") http_data::SysCallNum::Write as u64,
+            in("rdi") data.fd,
+            in("rsi") wptr,
+            in("rdx") data.nbytes,
+            lateout("rax") ret
+        );
+    }
+
+    let write_resp = http_data::WriteResp::new(200, ret);
+    HttpResponse::Ok().json(write_resp)
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| App::new().service(open).service(read).service(close))
-        .bind(("127.0.0.1", 8081))?
-        .run()
-        .await
+    HttpServer::new(|| {
+        App::new()
+            .service(open)
+            .service(read)
+            .service(close)
+            .service(write)
+    })
+    .bind(("127.0.0.1", 8081))?
+    .run()
+    .await
 }

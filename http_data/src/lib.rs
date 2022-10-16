@@ -4,12 +4,16 @@ use syscall_derive::{syscall_response, SysCall, SysCallResp};
 
 pub type SysData = Option<String>;
 
-pub fn encode_buffer(buf: &Vec<u8>, length: i64) -> String {
-    base64::encode(&buf[0..length as usize])
+pub fn encode_buffer(buf: &Vec<u8>, length: i64) -> SysData {
+    Some(base64::encode(&buf[0..length as usize]))
 }
 
-pub fn decode_buffer(buf: &str) -> Vec<u8> {
-    base64::decode(buf).unwrap_or(vec![])
+pub fn decode_buffer(buf: &SysData) -> Vec<u8> {
+    if let Some(b) = buf {
+        return base64::decode(b).unwrap_or(vec![]);
+    }
+
+    vec![]
 }
 
 // TODO: SysCalls always return a value (rax) so make it user definable integer,
@@ -42,7 +46,7 @@ pub fn is_implemented(num: u64) -> bool {
     let num: SysCallNum = unsafe { ::std::mem::transmute(num) };
 
     match num {
-        SysCallNum::Read | SysCallNum::Open | SysCallNum::Close => true,
+        SysCallNum::Read | SysCallNum::Open | SysCallNum::Close | SysCallNum::Write => true,
         _ => false,
     }
 }
@@ -92,3 +96,16 @@ pub struct ReadRequest {
 pub struct ReadResp {
     pub data: SysData,
 }
+
+#[derive(SysCall, Debug, Serialize, Deserialize)]
+#[syscall(num = "Write")]
+pub struct WriteRequest {
+    pub fd: i64,
+    pub buf: SysData,
+    pub nbytes: u64,
+}
+
+#[syscall_response]
+#[derive(SysCall, SysCallResp, Debug, Serialize, Deserialize)]
+#[syscall(num = "Write")]
+pub struct WriteResp;
