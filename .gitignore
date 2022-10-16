@@ -1,1 +1,3 @@
 /target
+/tests/asm/*.o
+/tests/asm/*.out
