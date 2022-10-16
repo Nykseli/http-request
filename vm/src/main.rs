@@ -61,12 +61,6 @@ fn read_data(pid: Pid, address: AddressType, length: u64) -> Vec<u8> {
         });
 
         for b in bytes {
-            /*     if b != 0 {
-                   buf.push(b);
-               } else {
-                   break 'done;
-               }
-            */
             if count >= length as isize {
                 break 'done;
             }
@@ -139,6 +133,7 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
     wait().unwrap();
 
     if regs.orig_rax == http_data::SysCallNum::Read {
+        println!("Sending read syscall request...");
         let write_addr = regs.rsi;
         let resp: http_data::ReadResp = request::unchecked_request(
             "read",
@@ -147,12 +142,14 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
                 nbytes: regs.rdx,
             },
         );
+        println!("Got a read response:\n{:#?}\n", resp);
 
         let byte_buf = http_data::decode_buffer(&resp.data);
         write_data(child, write_addr as *mut c_void, &byte_buf);
 
         handle_syscall_end(child, &resp);
     } else if regs.orig_rax == http_data::SysCallNum::Open {
+        println!("Sending read open request...");
         let path = read_string(child, regs.rdi as *mut c_void);
         let resp: http_data::OpenResp = request::unchecked_request(
             "open",
@@ -162,18 +159,22 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
                 mode: regs.rdx,
             },
         );
+        println!("Got a open response:\n{:#?}\n", resp);
 
         handle_syscall_end(child, &resp);
     } else if regs.orig_rax == http_data::SysCallNum::Close {
+        println!("Sending read close request...");
         let resp: http_data::CloseResp = request::unchecked_request(
             "close",
             &http_data::CloseRequest {
                 fd: regs.rdi as i64,
             },
         );
+        println!("Got a close response:\n{:#?}\n", resp);
 
         handle_syscall_end(child, &resp);
     } else if regs.orig_rax == http_data::SysCallNum::Write {
+        println!("Sending read write request...");
         let write_data = read_data(child, regs.rsi as *mut c_void, regs.rdx);
         let buf = http_data::encode_buffer(&write_data, regs.rdx as i64);
 
@@ -185,6 +186,7 @@ fn handle_syscall(child: Pid, regs: user_regs_struct) {
                 nbytes: regs.rdx,
             },
         );
+        println!("Got a write response:\n{:#?}\n", resp);
 
         handle_syscall_end(child, &resp);
     }

@@ -5,6 +5,7 @@ use std::ffi::CString;
 
 #[post("/open")]
 async fn open(data: web::Json<http_data::OpenRequest>) -> HttpResponse {
+    println!("Handling open syscall...");
     let path = CString::new(data.path.as_str()).unwrap();
     let mut fp: i64;
 
@@ -22,11 +23,13 @@ async fn open(data: web::Json<http_data::OpenRequest>) -> HttpResponse {
     }
 
     let open_resp = http_data::OpenResp::new(200, fp);
+    println!("Sending open response:\n{:#?}\n", open_resp);
     HttpResponse::Ok().json(open_resp)
 }
 
 #[post("/read")]
 async fn read(data: web::Json<http_data::ReadRequest>) -> HttpResponse {
+    println!("Handling read syscall...");
     let mut data_buf: Vec<u8> = vec![0; data.nbytes as usize];
     let mut read_length: i64;
 
@@ -49,12 +52,14 @@ async fn read(data: web::Json<http_data::ReadRequest>) -> HttpResponse {
         None
     };
 
-    let open_resp = http_data::ReadResp::new(200, read_length, resp_data);
-    HttpResponse::Ok().json(open_resp)
+    let read_resp = http_data::ReadResp::new(200, read_length, resp_data);
+    println!("Sending read response:\n{:#?}\n", read_resp);
+    HttpResponse::Ok().json(read_resp)
 }
 
 #[post("/close")]
 async fn close(data: web::Json<http_data::CloseRequest>) -> HttpResponse {
+    println!("Handling close syscall...");
     let mut ret: i64;
 
     unsafe {
@@ -67,12 +72,15 @@ async fn close(data: web::Json<http_data::CloseRequest>) -> HttpResponse {
         );
     }
 
-    let open_resp = http_data::CloseResp::new(200, ret);
-    HttpResponse::Ok().json(open_resp)
+    let close_resp = http_data::CloseResp::new(200, ret);
+    println!("Sending close response:\n{:#?}\n", close_resp);
+    HttpResponse::Ok().json(close_resp)
 }
 
 #[post("/write")]
 async fn write(data: web::Json<http_data::WriteRequest>) -> HttpResponse {
+    println!("Handling write syscall...");
+
     let mut ret: i64;
     let mut write_data = http_data::decode_buffer(&data.buf);
     unsafe {
@@ -88,6 +96,7 @@ async fn write(data: web::Json<http_data::WriteRequest>) -> HttpResponse {
     }
 
     let write_resp = http_data::WriteResp::new(200, ret);
+    println!("Sending write response:\n{:#?}\n", write_resp);
     HttpResponse::Ok().json(write_resp)
 }
 
