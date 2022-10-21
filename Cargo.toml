@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+    "server",
+    "vm",
+    "http_data",
+    "http_data/syscall_derive",
+]
